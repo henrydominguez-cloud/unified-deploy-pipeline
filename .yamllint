@@ -1,0 +1,12 @@
+extends: default
+ignore: |
+  examples/sample-app/chart/templates/
+  .venv/
+rules:
+  line-length:
+    max: 120
+  document-start: disable
+  truthy:
+    check-keys: false
+  comments:
+    min-spaces-from-content: 1

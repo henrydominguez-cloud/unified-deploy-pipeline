@@ -1,0 +1,16 @@
+# Never commit cluster access or secrets
+kubeconfig*
+*.kubeconfig
+.env
+*.pem
+*_key
+# Pipeline/local artifacts
+rendered.yaml
+grype.json
+report.xml
+__pycache__/
+.pytest_cache/
+setup.env
+.ci-scripts/
+.kind-kubeconfig
+.venv/
