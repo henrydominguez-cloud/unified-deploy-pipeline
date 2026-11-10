@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-labelledby="t d" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="t">unified-deploy-pipeline overview</title>
+  <desc id="d">Components call one shared pipeline pinned by tag. GitLab CI and GitHub Actions adapters run the same scripts, which deploy with Helm to two clusters. Four modes: full, config_only, deploy_image, rollback.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b949e"/>
+    </marker>
+  </defs>
+  <rect width="1280" height="640" fill="#0d1117"/>
+
+  <text x="64" y="84" font-size="44" font-weight="700" fill="#f0f6fc">unified-deploy-pipeline</text>
+  <text x="64" y="122" font-size="21" fill="#9da7b3">One shared deploy pipeline, pinned by tag, for GitLab CI and GitHub Actions</text>
+
+  <g font-size="13" font-weight="600" fill="#7d8590" letter-spacing="1.5">
+    <text x="64" y="168">ANY COMPONENT</text>
+    <text x="500" y="168">THIS REPO</text>
+    <text x="1000" y="168">CLUSTERS</text>
+  </g>
+
+  <!-- components -->
+  <g>
+    <g fill="#161b22" stroke="#30363d" stroke-width="1.5">
+      <rect x="64" y="180" width="280" height="76" rx="10"/>
+      <rect x="64" y="272" width="280" height="76" rx="10"/>
+      <rect x="64" y="364" width="280" height="76" rx="10"/>
+    </g>
+    <g font-size="18" font-weight="600" fill="#f0f6fc">
+      <text x="84" y="211">service-a</text>
+      <text x="84" y="303">service-b</text>
+      <text x="84" y="395">service-c</text>
+    </g>
+    <g font-size="14" fill="#9da7b3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+      <text x="84" y="236">dispatcher · chart/ · envs/</text>
+      <text x="84" y="328">dispatcher · chart/ · envs/</text>
+      <text x="84" y="420">dispatcher · chart/ · envs/</text>
+    </g>
+  </g>
+
+  <!-- arrows components -> shared pipeline -->
+  <g stroke="#8b949e" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="344" y1="218" x2="494" y2="218"/>
+    <line x1="344" y1="310" x2="494" y2="310"/>
+    <line x1="344" y1="402" x2="494" y2="402"/>
+  </g>
+  <text x="419" y="300" font-size="14" fill="#79c0ff" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">@v0.1.0</text>
+
+  <!-- shared pipeline -->
+  <rect x="500" y="180" width="360" height="260" rx="14" fill="#161b22" stroke="#2f81f7" stroke-width="2"/>
+  <text x="524" y="219" font-size="22" font-weight="700" fill="#f0f6fc">shared pipeline</text>
+  <rect x="752" y="197" width="86" height="30" rx="15" fill="#132339" stroke="#2f81f7" stroke-width="1.5"/>
+  <text x="795" y="217" font-size="15" fill="#79c0ff" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">v0.1.0</text>
+
+  <g fill="#0d1117" stroke="#30363d" stroke-width="1.5">
+    <rect x="524" y="242" width="150" height="54" rx="8"/>
+    <rect x="686" y="242" width="150" height="54" rx="8"/>
+  </g>
+  <g font-size="16" font-weight="600" fill="#f0f6fc">
+    <text x="538" y="265">GitLab CI</text>
+    <text x="700" y="265">GitHub Actions</text>
+  </g>
+  <g font-size="12" fill="#9da7b3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+    <text x="538" y="284">pipeline/*.yml</text>
+    <text x="700" y="284">.github/workflows</text>
+  </g>
+  <g stroke="#8b949e" stroke-width="2" marker-end="url(#arrow)">
+    <line x1="599" y1="296" x2="599" y2="320"/>
+    <line x1="761" y1="296" x2="761" y2="320"/>
+  </g>
+  <rect x="524" y="324" width="312" height="94" rx="8" fill="#0d1117" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="540" y="353" font-size="18" font-weight="700" fill="#7ee787" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">scripts/ci/*.sh</text>
+  <text x="540" y="377" font-size="14" fill="#c9d1d9">one logic for both platforms</text>
+  <text x="540" y="400" font-size="12" fill="#9da7b3" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">setup · build · deploy · rollback</text>
+
+  <!-- arrows -> clusters -->
+  <g stroke="#8b949e" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <line x1="860" y1="264" x2="994" y2="264"/>
+    <line x1="860" y1="356" x2="994" y2="356"/>
+  </g>
+  <text x="927" y="254" font-size="14" fill="#9da7b3" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">helm</text>
+  <text x="927" y="346" font-size="14" fill="#9da7b3" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">helm</text>
+
+  <g fill="#161b22" stroke="#30363d" stroke-width="1.5">
+    <rect x="1000" y="226" width="216" height="76" rx="10"/>
+    <rect x="1000" y="318" width="216" height="76" rx="10"/>
+  </g>
+  <g font-size="18" font-weight="600" fill="#f0f6fc">
+    <text x="1020" y="257">cluster-a</text>
+    <text x="1020" y="349">cluster-b</text>
+  </g>
+  <g font-size="14" fill="#9da7b3">
+    <text x="1020" y="282">Kubernetes</text>
+    <text x="1020" y="374">Kubernetes</text>
+  </g>
+
+  <!-- modes -->
+  <text x="64" y="492" font-size="13" font-weight="600" fill="#7d8590" letter-spacing="1.5">FOUR MODES</text>
+  <g fill="#161b22" stroke="#30363d" stroke-width="1.5">
+    <rect x="64" y="508" width="272" height="66" rx="10"/>
+    <rect x="357" y="508" width="272" height="66" rx="10"/>
+    <rect x="650" y="508" width="272" height="66" rx="10"/>
+    <rect x="943" y="508" width="273" height="66" rx="10"/>
+  </g>
+  <g font-size="17" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+    <text x="82" y="536" fill="#79c0ff">full</text>
+    <text x="375" y="536" fill="#7ee787">config_only</text>
+    <text x="668" y="536" fill="#d2a8ff">deploy_image</text>
+    <text x="961" y="536" fill="#ffa657">rollback</text>
+  </g>
+  <g font-size="14" fill="#c9d1d9">
+    <text x="82" y="559">build, test, scan, deploy</text>
+    <text x="375" y="559">new values, same image</text>
+    <text x="668" y="559">ship an existing image tag</text>
+    <text x="961" y="559">back to a previous revision</text>
+  </g>
+
+  <g font-size="13" fill="#7d8590">
+    <text x="64" y="612">Tested end to end on kind · MIT</text>
+    <text x="1216" y="612" text-anchor="end">github.com/henrydominguez-cloud/unified-deploy-pipeline</text>
+  </g>
+</svg>

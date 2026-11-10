@@ -6,6 +6,8 @@
 
 [![ci](https://github.com/henrydominguez-cloud/unified-deploy-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/henrydominguez-cloud/unified-deploy-pipeline/actions/workflows/ci.yml) ![license](https://img.shields.io/badge/license-MIT-blue) ![helm](https://img.shields.io/badge/Helm-3_|_4-0f1689)
 
+![Components call one shared pipeline pinned by tag; GitLab CI and GitHub Actions adapters run the same scripts and deploy with Helm](docs/overview.svg)
+
 ## Why this exists
 
 When every service carries its own long CI file, and its chart and values live in other
@@ -175,6 +177,7 @@ Every deploy log ends with `DEPLOY OK · <release> · <cluster> · <namespace> �
 │   ├── check-sanitized.sh       secret / private-term scan: files + git history
 │   ├── doctor.sh · preflight.sh tool check · all pre-push checks in one command
 │   └── hooks/pre-push           installed by `make hooks`
+├── docs/                        overview.svg (README image) · social-preview.png
 ├── examples/
 │   ├── dispatcher-github/       workflow to copy into a component (GitHub)
 │   ├── dispatcher-gitlab/       .gitlab-ci.yml + CODEOWNERS to copy (GitLab)
