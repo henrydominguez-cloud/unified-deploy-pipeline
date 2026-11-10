@@ -1,0 +1,52 @@
+# Self-test for this repo: lint everything, then run the shared pipeline
+# against examples/sample-app as a child pipeline. Deploy jobs appear
+# only if KUBECONFIG_CLUSTER_A / _B are defined (see README).
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
+
+stages:
+  - validate
+  - self-test
+
+yamllint:
+  stage: validate
+  image: docker.io/library/python:3.12-slim
+  script:
+    - pip install --quiet yamllint==1.35.1
+    - yamllint -c .yamllint .
+
+shellcheck:
+  stage: validate
+  image: docker.io/koalaman/shellcheck-alpine:v0.10.0
+  script:
+    - shellcheck -s sh scripts/ci/*.sh scripts/doctor.sh scripts/preflight.sh scripts/hooks/pre-push tests/*.sh
+    - shellcheck scripts/check-sanitized.sh
+
+script_tests:
+  stage: validate
+  image: docker.io/library/alpine:3.20
+  script:
+    - sh tests/ci-scripts.sh
+
+sanitized:
+  stage: validate
+  image: docker.io/library/alpine:3.20
+  script:
+    - apk add --no-cache bash grep git findutils >/dev/null
+    - bash scripts/check-sanitized.sh .
+
+self_test:
+  stage: self-test
+  variables:
+    APP_DIR: examples/sample-app
+    APP_NAME: sample-app
+    DEPLOYMENT_MODE: full
+  trigger:
+    include: pipeline/unified-pipeline.yml
+    strategy: depend

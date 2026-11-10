@@ -1,0 +1,43 @@
+# Runs the same `make preflight` you run locally: unit tests, script tests,
+# lint, helm render, sanitize and the 4-mode end-to-end test on kind.
+# Then runs the shared GitHub deploy workflow against examples/sample-app.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write           # self-test pushes the sample image to ghcr.io
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # sanitize also scans git history
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Python tools
+        run: pip install pytest yamllint
+      # docker, kind, kubectl, helm and shellcheck ship with ubuntu-latest;
+      # `make doctor` (first preflight step) fails clearly if one is missing.
+      - name: Preflight
+        run: make preflight
+
+  # Self-test of the shared deploy workflow: test, build, push, scan and
+  # render the sample app. No kubeconfig secret is set, so deploys are skipped.
+  deploy-selftest:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      mode: full
+      app_dir: examples/sample-app
+      app_name: sample-app
+      pipeline_repo: ""       # use scripts/ci from this checkout
+    secrets: inherit

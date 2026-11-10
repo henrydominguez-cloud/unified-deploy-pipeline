@@ -1,0 +1,8 @@
+#!/bin/sh
+# Installed by `make hooks`. Blocks a push if the fast checks fail.
+# Skip once with: git push --no-verify
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+echo "pre-push: sanitize + script tests"
+bash scripts/check-sanitized.sh . | tail -3
+sh tests/ci-scripts.sh | tail -1
