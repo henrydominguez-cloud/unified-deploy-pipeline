@@ -1,0 +1,5 @@
+# Application values — owned by the component team.
+config:
+  GREETING: "hello from production"
+  FEATURE_NEW_UI: "false"
+  LOG_LEVEL: "info"

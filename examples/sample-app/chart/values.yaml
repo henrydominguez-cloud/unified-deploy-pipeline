@@ -1,0 +1,21 @@
+# Base defaults — lowest priority in the values chain.
+# Overridden by envs/<env>/infra.yaml, then envs/<env>/app.yaml,
+# then the pipeline's --set image.repository / image.tag.
+
+image:
+  repository: registry.example.com/sample-app   # always overridden by the pipeline
+  tag: latest                                   # always overridden by the pipeline
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+containerPort: 8080
+
+service:
+  port: 80
+
+resources: {}
+nodeSelector: {}
+
+# Application config -> ConfigMap -> container env.
+# Keys are written as-is as env var names.
+config: {}

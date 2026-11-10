@@ -1,0 +1,6 @@
+# Application values — owned by the component team. Highest priority file.
+# Rule: changes HOW the app behaves (texts, flags, endpoints, log level).
+config:
+  GREETING: "hello from develop"
+  FEATURE_NEW_UI: "true"
+  LOG_LEVEL: "debug"

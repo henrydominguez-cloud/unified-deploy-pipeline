@@ -1,0 +1,10 @@
+# Infrastructure values — owned by the platform team.
+# Rule: changes HOW MUCH the app uses (replicas, CPU, memory, placement).
+replicaCount: 1
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
