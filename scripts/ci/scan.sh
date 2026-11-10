@@ -7,7 +7,9 @@ set -eu
 . "$(dirname "$0")/lib.sh"
 need IMAGE_REPOSITORY NEW_TAG
 command -v grype >/dev/null || die "grype not found on PATH"
-SRC="registry:$IMAGE_REPOSITORY:$NEW_TAG"
+# SCAN_SOURCE=registry (default: the pushed image) | docker (local daemon,
+# for builds that were not pushed)
+SRC="${SCAN_SOURCE:-registry}:$IMAGE_REPOSITORY:$NEW_TAG"
 
 if [ "${SECURITY_SCAN_STRICT:-false}" = "true" ]; then
   grype "$SRC" -o json --file grype.json --fail-on critical

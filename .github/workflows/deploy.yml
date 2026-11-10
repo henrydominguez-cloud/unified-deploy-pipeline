@@ -36,6 +36,10 @@ on:
       skip_tests:
         type: boolean
         default: false
+      push_image:
+        description: "full only: push the image to ghcr.io (false = build and scan locally, no deploy)"
+        type: boolean
+        default: true
       security_scan_strict:
         description: "Fail on critical CVEs"
         type: boolean
@@ -101,9 +105,10 @@ jobs:
       - name: Test
         if: ${{ !inputs.skip_tests }}
         run: sh .ci-scripts/test.sh
-      - name: Build and push image
+      - name: Build image (and push)
         env:
           BUILDER: docker
+          PUSH: ${{ inputs.push_image }}
           REGISTRY: ghcr.io
           REGISTRY_USER: ${{ github.actor }}
           REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
@@ -111,6 +116,7 @@ jobs:
       - name: Scan image
         env:
           SECURITY_SCAN_STRICT: ${{ inputs.security_scan_strict }}
+          SCAN_SOURCE: ${{ inputs.push_image && 'registry' || 'docker' }}
           GRYPE_REGISTRY_AUTH_AUTHORITY: ghcr.io
           GRYPE_REGISTRY_AUTH_USERNAME: ${{ github.actor }}
           GRYPE_REGISTRY_AUTH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
@@ -162,6 +168,7 @@ jobs:
     needs: [build, lint]
     if: >-
       !cancelled() && inputs.mode != 'rollback'
+      && (inputs.mode != 'full' || inputs.push_image)
       && needs.lint.result == 'success'
       && (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-latest

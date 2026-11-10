@@ -19,8 +19,8 @@ hosted product.
 
 | What | Status |
 |---|---|
-| `scripts/ci/*.sh`, chart, four modes | Tested: 27 unit/script tests + 19 end-to-end assertions on kind (`make preflight`) |
-| GitHub Actions adapter | Self-test on every push to this repo (test, build, push, scan, render); deploy to a real cluster not yet exercised |
+| `scripts/ci/*.sh`, chart, four modes | Tested: 32 unit/script tests + 19 end-to-end assertions on kind (`make preflight`), locally and in GitHub Actions |
+| GitHub Actions adapter | Self-test on every push to this repo: test, build, scan, render. Pushing to ghcr.io and deploying to a real cluster are not yet verified |
 | GitLab CI adapter | Written and linted; first run on a live GitLab instance pending |
 
 ## Architecture

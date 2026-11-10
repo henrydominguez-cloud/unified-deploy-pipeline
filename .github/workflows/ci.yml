@@ -10,7 +10,7 @@ on:
 
 permissions:
   contents: read
-  packages: write           # self-test pushes the sample image to ghcr.io
+  packages: write           # required by the called deploy workflow's build job
 
 jobs:
   preflight:
@@ -30,8 +30,9 @@ jobs:
       - name: Preflight
         run: make preflight
 
-  # Self-test of the shared deploy workflow: test, build, push, scan and
-  # render the sample app. No kubeconfig secret is set, so deploys are skipped.
+  # Self-test of the shared deploy workflow: test, build, scan and render the
+  # sample app. The image is built and scanned locally, never pushed, so this
+  # repo publishes no packages; without a push there is no deploy.
   deploy-selftest:
     if: github.event_name == 'push'
     uses: ./.github/workflows/deploy.yml
@@ -39,5 +40,6 @@ jobs:
       mode: full
       app_dir: examples/sample-app
       app_name: sample-app
+      push_image: false
       pipeline_repo: ""       # use scripts/ci from this checkout
     secrets: inherit

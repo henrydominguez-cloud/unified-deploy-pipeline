@@ -26,7 +26,11 @@ case "$*" in
   *current-context*) echo stub-cluster ;;
 esac
 STUB
-chmod +x "$TMP/bin/helm" "$TMP/bin/kubectl"
+# shellcheck disable=SC2016
+for t in docker grype; do
+  printf '#!/bin/sh\necho "%s $*" >> "$CALLS"\n' "$t" > "$TMP/bin/$t"
+done
+chmod +x "$TMP/bin/helm" "$TMP/bin/kubectl" "$TMP/bin/docker" "$TMP/bin/grype"
 export PATH="$TMP/bin:$PATH" CALLS
 
 # Clean environment: no CI built-ins leak into the tests.
@@ -70,6 +74,22 @@ else ok "setup: deploy_image without IMAGE_TAG fails"; fi
 if DEPLOYMENT_MODE=yolo sh "$CI/setup.sh" >/dev/null 2>&1; then
   nok "setup: unknown mode must fail"
 else ok "setup: unknown mode fails"; fi
+
+# ── build + scan ────────────────────────────────────────────────────
+plan feature/login full
+BUILDER=docker PUSH=false sh "$CI/build.sh" >/dev/null
+has   "build: builds the planned tag"      "docker build -f examples/sample-app/Dockerfile -t local/sample-app:dev-42" "$CALLS"
+hasnt "build: PUSH=false does not push"    "docker push"             "$CALLS"
+
+: > "$CALLS"
+BUILDER=docker GITHUB_REPOSITORY=you/repo sh "$CI/build.sh" >/dev/null
+has   "build: pushes by default"           "docker push local/sample-app:dev-42" "$CALLS"
+has   "build: github source label"         "org.opencontainers.image.source=https://github.com/you/repo" "$CALLS"
+
+: > "$CALLS"
+SCAN_SOURCE=docker sh "$CI/scan.sh" >/dev/null
+has   "scan: local image source"           "grype docker:local/sample-app:dev-42" "$CALLS"
+rm -f grype.json
 
 # ── deploy ──────────────────────────────────────────────────────────
 plan feature/login full
