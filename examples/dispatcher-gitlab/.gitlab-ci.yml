@@ -1,0 +1,50 @@
+# Dispatcher — copy this file to the root of a component repo.
+# It replaces a per-component pipeline: the real work lives in the
+# shared pipeline, pinned by tag.
+
+workflow:
+  name: "$DEPLOYMENT_MODE · $TARGET_CLUSTERS · $CI_COMMIT_REF_NAME"
+  rules:
+    # git push never deploys. A pipeline starts only from one of these:
+    - if: '$CI_PIPELINE_SOURCE == "web"'        # "Run pipeline" form in this repo
+    - if: '$CI_PIPELINE_SOURCE == "pipeline"'   # a deploy console repo (examples/console-gitlab)
+    - if: '$CI_PIPELINE_SOURCE == "trigger"'    # a pipeline trigger token
+    - if: '$CI_PIPELINE_SOURCE == "api"'        # the pipelines API
+
+variables:
+  DEPLOYMENT_MODE:
+    value: "full"
+    options: ["full", "config_only", "deploy_image", "rollback"]
+    description: "full=build+deploy · config_only=values only · deploy_image=existing tag · rollback"
+  TARGET_CLUSTERS:
+    value: "both"
+    options: ["cluster-a", "cluster-b", "both"]
+  IMAGE_TAG:
+    value: ""
+    description: "deploy_image only: existing image tag"
+  ROLLBACK_TO_REVISION:
+    value: ""
+    description: "rollback only: Helm revision (empty = previous)"
+
+stages: [dispatch]
+
+dispatch:
+  stage: dispatch
+  variables:
+    # Where the shared scripts live. Keep PIPELINE_REF equal to `ref:` below.
+    # (Step 2, a versioned ci-base image, removes this duplication.)
+    PIPELINE_REPO: "https://gitlab.com/your-group/unified-deploy-pipeline.git"
+    PIPELINE_REF: "v0.1.0"
+  trigger:
+    include:
+      - project: "your-group/unified-deploy-pipeline"   # ← change to where you host the shared pipeline
+        ref: v0.1.0                            # ← pinned tag, never a branch
+        file: "/pipeline/unified-pipeline.yml"
+    strategy: depend                           # parent fails if the child fails
+    forward:
+      pipeline_variables: true                 # pass the form choices to the child
+
+# Lesson learned: if you split into several dispatchers routed by a
+# variable (e.g. one per platform), never also set that variable in the
+# job's own `variables:`. The job's value matches its own rule and every
+# dispatcher fires at once.

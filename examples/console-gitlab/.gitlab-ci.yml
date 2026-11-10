@@ -1,0 +1,62 @@
+# Deploy console (optional) — a tiny repo whose only job is to launch any
+# onboarded component's pipeline with the mode and clusters you pick.
+# Component repos and the shared pipeline stay unchanged: this is a thin
+# launcher on top.
+#
+#   console  ──trigger──▶  component dispatcher  ──include by tag──▶  shared pipeline
+#
+# Copy this file to the root of a separate launcher project.
+# Not yet run on a live GitLab instance: treat it as a starting point.
+
+workflow:
+  name: "$COMPONENT_PROJECT · $DEPLOYMENT_MODE · $TARGET_CLUSTERS"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+variables:
+  COMPONENT_PROJECT:
+    value: "your-group/sample-app"
+    options: ["your-group/sample-app", "your-group/another-component"]
+    description: "Component to deploy (add each onboarded project here)"
+  COMPONENT_REF:
+    value: "main"
+    description: "Branch of the component: main = production, anything else = develop"
+  DEPLOYMENT_MODE:
+    value: "deploy_image"
+    options: ["full", "config_only", "deploy_image", "rollback"]
+  TARGET_CLUSTERS:
+    value: "both"
+    options: ["cluster-a", "cluster-b", "both"]
+  IMAGE_TAG:
+    value: ""
+    description: "deploy_image only: existing image tag"
+  ROLLBACK_TO_REVISION:
+    value: ""
+    description: "rollback only: Helm revision (empty = previous)"
+
+stages: [launch]
+
+# Multi-project trigger: runs with the permissions of the person who clicked
+# "Run pipeline", so no token is stored anywhere. They need permission to
+# run pipelines on the component's branch.
+launch:
+  stage: launch
+  variables:
+    DEPLOYMENT_MODE: $DEPLOYMENT_MODE
+    TARGET_CLUSTERS: $TARGET_CLUSTERS
+    IMAGE_TAG: $IMAGE_TAG
+    ROLLBACK_TO_REVISION: $ROLLBACK_TO_REVISION
+  trigger:
+    project: $COMPONENT_PROJECT
+    branch: $COMPONENT_REF
+    strategy: depend
+
+# Alternative from outside GitLab (a script, a web UI, another CI): a
+# pipeline trigger token created in the component (Settings → CI/CD →
+# Pipeline trigger tokens). Keep the token in a secret store, never in git.
+#
+#   curl --fail --request POST \
+#     --form "token=${TRIGGER_TOKEN}" --form "ref=main" \
+#     --form "variables[DEPLOYMENT_MODE]=config_only" \
+#     --form "variables[TARGET_CLUSTERS]=cluster-a" \
+#     "https://gitlab.com/api/v4/projects/${COMPONENT_PROJECT_ID}/trigger/pipeline"

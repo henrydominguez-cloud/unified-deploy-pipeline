@@ -1,0 +1,15 @@
+# unified-deploy-pipeline — shared pipeline entrypoint.
+#
+# Components do NOT copy this file. They include it by tag from a ~20-line
+# dispatcher (see examples/dispatcher-gitlab/.gitlab-ci.yml), so a fix here ships
+# to every component that bumps its `ref:`.
+#
+# Each block is one building block with a single responsibility.
+# Order matters only for readability; GitLab merges all includes.
+
+include:
+  - local: /pipeline/blocks/00-base.yml          # stages, defaults, pinned tool images
+  - local: /pipeline/blocks/10-setup.yml         # detect project, branch -> env, dotenv
+  - local: /pipeline/blocks/20-test.yml          # language tests (python, java)
+  - local: /pipeline/blocks/30-image.yml         # daemonless build + vulnerability scan
+  - local: /pipeline/blocks/40-deploy.yml        # lint, deploy, smoke, rollback per cluster

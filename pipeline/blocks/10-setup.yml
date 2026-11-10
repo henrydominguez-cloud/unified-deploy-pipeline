@@ -1,0 +1,25 @@
+# 10-setup — get the scripts, then decide everything once.
+#
+# Scripts source:
+#   PIPELINE_REPO empty  -> use scripts/ci from this checkout (self-test)
+#   PIPELINE_REPO set    -> clone it at PIPELINE_REF (component repos; set both in the dispatcher)
+# The scripts travel to every later job as an artifact in .ci-scripts/, together
+# with the dotenv plan, so all jobs run the same script version.
+
+setup:
+  stage: setup
+  script:
+    - |
+      set -eu
+      if [ -n "${PIPELINE_REPO:-}" ]; then
+        apk add --no-cache git >/dev/null
+        git clone --quiet --depth 1 --branch "$PIPELINE_REF" "$PIPELINE_REPO" /tmp/shared-pipeline
+        cp -r /tmp/shared-pipeline/scripts/ci .ci-scripts
+      else
+        cp -r scripts/ci .ci-scripts
+      fi
+    - sh .ci-scripts/setup.sh
+  artifacts:
+    paths: [.ci-scripts/]
+    reports:
+      dotenv: setup.env

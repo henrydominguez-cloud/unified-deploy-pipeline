@@ -1,0 +1,34 @@
+# 20-test — one job per language. Rules run before setup knows the type,
+# so each job is created in `full` mode and test.sh exits 0 on a mismatch.
+
+.test_rules:
+  rules:
+    - if: '$DEPLOYMENT_MODE != "full"'
+      when: never
+    - if: '$SKIP_TESTS == "true"'
+      when: never
+    - when: on_success
+
+test_python:
+  stage: test
+  image: $PYTHON_IMAGE
+  extends: .test_rules
+  needs: [setup]
+  script:
+    - sh .ci-scripts/test.sh python
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+
+test_java:
+  stage: test
+  image: $MAVEN_IMAGE
+  extends: .test_rules
+  needs: [setup]
+  script:
+    - sh .ci-scripts/test.sh java
+  artifacts:
+    when: always
+    reports:
+      junit: "**/target/surefire-reports/TEST-*.xml"

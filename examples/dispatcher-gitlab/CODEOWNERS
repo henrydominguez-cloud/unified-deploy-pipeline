@@ -1,0 +1,6 @@
+# Copy to .gitlab/CODEOWNERS in a component repo and enable
+# "Require approval from code owners" on the protected branch.
+# This turns the app.yaml / infra.yaml split into an enforced rule.
+/envs/**/infra.yaml   @your-group/platform
+/chart/               @your-group/platform
+/envs/**/app.yaml     @your-group/component-team

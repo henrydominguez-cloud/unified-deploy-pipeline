@@ -1,0 +1,44 @@
+# 30-image — build only in `full` mode. config_only and deploy_image
+# never build, which is the whole point of having modes.
+
+.full_only:
+  rules:
+    - if: '$DEPLOYMENT_MODE == "full"'
+
+# Daemonless build: no Docker socket, no privileged runner.
+build_image:
+  stage: image
+  image: $BUILDAH_IMAGE
+  extends: .full_only
+  needs:
+    - setup
+    - job: test_python
+      optional: true
+    - job: test_java
+      optional: true
+  variables:
+    BUILDER: buildah
+    STORAGE_DRIVER: vfs
+    BUILDAH_ISOLATION: chroot
+  script:
+    - sh .ci-scripts/build.sh
+
+# Advisory by default; SECURITY_SCAN_STRICT=true blocks on criticals.
+scan_image:
+  stage: image
+  extends: .full_only
+  needs: [setup, build_image]
+  variables:
+    GRYPE_REGISTRY_AUTH_AUTHORITY: "$REGISTRY"
+    GRYPE_REGISTRY_AUTH_USERNAME: "$REGISTRY_USER"
+    GRYPE_REGISTRY_AUTH_PASSWORD: "$REGISTRY_PASSWORD"
+  script:
+    # Step 2 (ci-base image) removes this install.
+    - apk add --no-cache curl >/dev/null
+    - curl -sSfL "https://raw.githubusercontent.com/anchore/grype/$GRYPE_VERSION/install.sh"
+        | sh -s -- -b /usr/local/bin "$GRYPE_VERSION"
+    - sh .ci-scripts/scan.sh
+  artifacts:
+    when: always
+    paths: [grype.json]
+    expire_in: 30 days

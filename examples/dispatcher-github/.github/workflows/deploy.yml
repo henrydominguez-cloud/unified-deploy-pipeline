@@ -1,0 +1,49 @@
+# Dispatcher for GitHub Actions — copy this file to
+# .github/workflows/deploy.yml in a component repo. It is the only CI file
+# the component needs: the real work lives in the shared workflow, pinned
+# by tag.
+name: deploy
+run-name: "${{ inputs.mode }} · ${{ inputs.clusters }} · ${{ github.ref_name }}"
+
+# Manual only ("Run workflow" button, `gh workflow run`, or the REST API).
+# A git push never deploys.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "full=build+deploy · config_only=values only · deploy_image=existing tag · rollback"
+        type: choice
+        options: [full, config_only, deploy_image, rollback]
+        default: full
+      clusters:
+        type: choice
+        options: [cluster-a, cluster-b, both]
+        default: both
+      image_tag:
+        description: "deploy_image only: existing image tag"
+        default: ""
+      rollback_to_revision:
+        description: "rollback only: Helm revision (empty = previous)"
+        default: ""
+
+permissions:
+  contents: read
+  packages: write        # push the image to ghcr.io in `full` mode
+
+jobs:
+  deploy:
+    # ↓ change the owner if you forked the shared pipeline; keep both tags equal
+    uses: henrydominguez-cloud/unified-deploy-pipeline/.github/workflows/deploy.yml@v0.1.0
+    with:
+      pipeline_ref: v0.1.0
+      mode: ${{ inputs.mode }}
+      clusters: ${{ inputs.clusters }}
+      image_tag: ${{ inputs.image_tag }}
+      rollback_to_revision: ${{ inputs.rollback_to_revision }}
+    # Passes KUBECONFIG_CLUSTER_A / KUBECONFIG_CLUSTER_B if you defined them
+    # (Settings → Secrets and variables → Actions). No secret = that cluster is skipped.
+    secrets: inherit
+
+# Launch from anywhere (your "deploy console"), no extra repo needed:
+#   gh workflow run deploy.yml -R your-org/your-component --ref main \
+#     -f mode=config_only -f clusters=cluster-a

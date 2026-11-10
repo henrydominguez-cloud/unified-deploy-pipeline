@@ -1,0 +1,55 @@
+# 00-base — stages, defaults and the variables every other block reads.
+# Every value here can be overridden from the dispatcher or the
+# "Run pipeline" form (pipeline variables win over YAML defaults).
+
+stages:
+  - setup
+  - test
+  - image
+  - lint
+  - deploy
+  - verify
+  - rollback
+
+variables:
+  # ── Run-time choices (set from the dispatcher form) ──────────────
+  DEPLOYMENT_MODE: "full"        # full | config_only | deploy_image | rollback
+  TARGET_CLUSTERS: "both"        # cluster-a | cluster-b | both
+  IMAGE_TAG: ""                  # deploy_image only: existing tag to deploy
+  ROLLBACK_TO_REVISION: ""       # rollback only: empty = previous revision
+  SKIP_TESTS: "false"
+  SECURITY_SCAN_STRICT: "false"  # "true" = fail the pipeline on critical CVEs
+
+  # ── Where the scripts come from (see 10-setup) ───────────────────
+  PIPELINE_REPO: ""                  # empty = this checkout (self-test)
+  PIPELINE_REF: ""                   # tag to clone when PIPELINE_REPO is set
+
+  # ── Component layout (defaults match examples/sample-app) ────────
+  APP_DIR: "."                   # component root inside the repo
+  APP_NAME: ""                   # Helm release + image name; empty = CI_PROJECT_NAME
+  CHART_DIR: "chart"             # relative to APP_DIR
+  ENVS_DIR: "envs"               # relative to APP_DIR
+  NAMESPACE_DEVELOP: "develop"
+  NAMESPACE_PRODUCTION: "production"
+  SMOKE_PATH: "/healthz"
+  SMOKE_PORT: "80"
+
+  # ── Registry (defaults to the GitLab Container Registry) ────────
+  REGISTRY: "$CI_REGISTRY"
+  REGISTRY_USER: "$CI_REGISTRY_USER"
+  REGISTRY_PASSWORD: "$CI_REGISTRY_PASSWORD"
+  IMAGE_REPO: ""                 # empty = $CI_REGISTRY_IMAGE/<APP_NAME>
+
+  # ── Pinned tool images (fully qualified: CRI-O rejects short names)
+  # Not verified as the latest tags — check before the first run.
+  ALPINE_IMAGE: "docker.io/library/alpine:3.20"
+  KUBE_IMAGE: "docker.io/alpine/k8s:1.31.4"          # helm + kubectl
+  PYTHON_IMAGE: "docker.io/library/python:3.12-slim"
+  MAVEN_IMAGE: "docker.io/library/maven:3.9-eclipse-temurin-21"
+  BUILDAH_IMAGE: "quay.io/buildah/stable:v1.38"
+  CURL_IMAGE: "docker.io/curlimages/curl:8.11.1"
+  GRYPE_VERSION: "v0.86.1"
+
+default:
+  image: $ALPINE_IMAGE
+  interruptible: true

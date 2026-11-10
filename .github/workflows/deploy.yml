@@ -1,0 +1,273 @@
+# Shared deploy workflow for GitHub Actions — the GitHub twin of
+# pipeline/unified-pipeline.yml (GitLab CI). Both call the same
+# scripts/ci/*.sh, so behaviour is identical on either platform.
+#
+# Components do NOT copy this file. They call it by tag from a small
+# workflow (see examples/dispatcher-github/.github/workflows/deploy.yml).
+name: unified-deploy
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: "full | config_only | deploy_image | rollback"
+        type: string
+        default: full
+      clusters:
+        description: "cluster-a | cluster-b | both"
+        type: string
+        default: both
+      image_tag:
+        description: "deploy_image only: existing image tag"
+        type: string
+        default: ""
+      rollback_to_revision:
+        description: "rollback only: Helm revision (empty = previous)"
+        type: string
+        default: ""
+      app_dir:
+        description: "Component root inside the repo"
+        type: string
+        default: "."
+      app_name:
+        description: "Helm release and image name (empty = repository name)"
+        type: string
+        default: ""
+      skip_tests:
+        type: boolean
+        default: false
+      security_scan_strict:
+        description: "Fail on critical CVEs"
+        type: boolean
+        default: false
+      pipeline_repo:
+        description: "owner/repo that hosts scripts/ci (empty = the calling repo itself)"
+        type: string
+        default: "henrydominguez-cloud/unified-deploy-pipeline"
+      pipeline_ref:
+        description: "Tag of pipeline_repo to take the scripts from; keep equal to the @tag in `uses:`"
+        type: string
+        default: "main"
+    secrets:
+      KUBECONFIG_CLUSTER_A:
+        description: "kubeconfig for cluster-a (omit to disable that cluster)"
+        required: false
+      KUBECONFIG_CLUSTER_B:
+        description: "kubeconfig for cluster-b (omit to disable that cluster)"
+        required: false
+
+# Read by scripts/ci/*.sh. setup.sh also reads GITHUB_REPOSITORY,
+# GITHUB_REF_NAME and GITHUB_RUN_ID, which GitHub sets by itself.
+env:
+  DEPLOYMENT_MODE: ${{ inputs.mode }}
+  IMAGE_TAG: ${{ inputs.image_tag }}
+  ROLLBACK_TO_REVISION: ${{ inputs.rollback_to_revision }}
+  APP_DIR: ${{ inputs.app_dir }}
+  APP_NAME: ${{ inputs.app_name }}
+  GRYPE_VERSION: v0.86.1
+
+jobs:
+  # ── full only: test, build, push to ghcr.io, scan ───────────────────
+  build:
+    if: inputs.mode == 'full'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        if: inputs.pipeline_repo != ''
+        with:
+          repository: ${{ inputs.pipeline_repo }}
+          ref: ${{ inputs.pipeline_ref }}
+          path: .shared-pipeline
+      - name: Plan
+        run: |
+          SRC=scripts/ci
+          if [ -d .shared-pipeline ]; then SRC=.shared-pipeline/scripts/ci; fi
+          cp -r "$SRC" .ci-scripts
+          sh .ci-scripts/setup.sh
+          cat setup.env >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v5
+        if: env.PROJECT_TYPE == 'python' && !inputs.skip_tests
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v4
+        if: env.PROJECT_TYPE == 'java' && !inputs.skip_tests
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Test
+        if: ${{ !inputs.skip_tests }}
+        run: sh .ci-scripts/test.sh
+      - name: Build and push image
+        env:
+          BUILDER: docker
+          REGISTRY: ghcr.io
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: sh .ci-scripts/build.sh
+      - name: Scan image
+        env:
+          SECURITY_SCAN_STRICT: ${{ inputs.security_scan_strict }}
+          GRYPE_REGISTRY_AUTH_AUTHORITY: ghcr.io
+          GRYPE_REGISTRY_AUTH_USERNAME: ${{ github.actor }}
+          GRYPE_REGISTRY_AUTH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSfL "https://raw.githubusercontent.com/anchore/grype/$GRYPE_VERSION/install.sh" \
+            | sh -s -- -b "$RUNNER_TEMP/bin" "$GRYPE_VERSION"
+          PATH="$RUNNER_TEMP/bin:$PATH" sh .ci-scripts/scan.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: grype-report
+          path: grype.json
+          if-no-files-found: ignore
+
+  # ── every mode except rollback: helm lint + render ──────────────────
+  lint:
+    if: inputs.mode != 'rollback'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        if: inputs.pipeline_repo != ''
+        with:
+          repository: ${{ inputs.pipeline_repo }}
+          ref: ${{ inputs.pipeline_ref }}
+          path: .shared-pipeline
+      - name: Plan
+        run: |
+          SRC=scripts/ci
+          if [ -d .shared-pipeline ]; then SRC=.shared-pipeline/scripts/ci; fi
+          cp -r "$SRC" .ci-scripts
+          sh .ci-scripts/setup.sh
+          cat setup.env >> "$GITHUB_ENV"
+      - name: Helm lint and render
+        run: sh .ci-scripts/render.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rendered-manifests
+          path: rendered.yaml
+
+  # ── deploy + smoke, once per cluster ────────────────────────────────
+  # Manual gate: add required reviewers to the GitHub environments
+  # "cluster-a" / "cluster-b" (Settings → Environments). Without reviewers
+  # the job runs straight away.
+  deploy:
+    needs: [build, lint]
+    if: >-
+      !cancelled() && inputs.mode != 'rollback'
+      && needs.lint.result == 'success'
+      && (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        cluster: >-
+          ${{ fromJSON(inputs.clusters == 'both'
+          && '["cluster-a","cluster-b"]'
+          || format('["{0}"]', inputs.clusters)) }}
+    environment: ${{ matrix.cluster }}
+    concurrency: deploy-${{ matrix.cluster }}     # one deploy per cluster at a time
+    env:
+      CLUSTER_NAME: ${{ matrix.cluster }}
+    steps:
+      - name: Cluster credentials
+        id: kube
+        env:
+          KUBECONFIG_CONTENT: >-
+            ${{ secrets[matrix.cluster == 'cluster-a'
+            && 'KUBECONFIG_CLUSTER_A' || 'KUBECONFIG_CLUSTER_B'] }}
+        run: |
+          if [ -z "$KUBECONFIG_CONTENT" ]; then
+            echo "::notice::${CLUSTER_NAME} has no kubeconfig secret — deploy skipped"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          umask 077
+          printf '%s' "$KUBECONFIG_CONTENT" > "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.kube.outputs.configured == 'true'
+      - uses: actions/checkout@v4
+        if: steps.kube.outputs.configured == 'true' && inputs.pipeline_repo != ''
+        with:
+          repository: ${{ inputs.pipeline_repo }}
+          ref: ${{ inputs.pipeline_ref }}
+          path: .shared-pipeline
+      - name: Plan
+        if: steps.kube.outputs.configured == 'true'
+        run: |
+          SRC=scripts/ci
+          if [ -d .shared-pipeline ]; then SRC=.shared-pipeline/scripts/ci; fi
+          cp -r "$SRC" .ci-scripts
+          sh .ci-scripts/setup.sh
+          cat setup.env >> "$GITHUB_ENV"
+      - name: Deploy
+        if: steps.kube.outputs.configured == 'true'
+        run: sh .ci-scripts/deploy.sh
+      - name: Smoke test
+        if: steps.kube.outputs.configured == 'true'
+        run: sh .ci-scripts/smoke.sh
+
+  # ── rollback, once per cluster ──────────────────────────────────────
+  rollback:
+    if: inputs.mode == 'rollback'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        cluster: >-
+          ${{ fromJSON(inputs.clusters == 'both'
+          && '["cluster-a","cluster-b"]'
+          || format('["{0}"]', inputs.clusters)) }}
+    environment: ${{ matrix.cluster }}
+    concurrency: deploy-${{ matrix.cluster }}
+    env:
+      CLUSTER_NAME: ${{ matrix.cluster }}
+    steps:
+      - name: Cluster credentials
+        id: kube
+        env:
+          KUBECONFIG_CONTENT: >-
+            ${{ secrets[matrix.cluster == 'cluster-a'
+            && 'KUBECONFIG_CLUSTER_A' || 'KUBECONFIG_CLUSTER_B'] }}
+        run: |
+          if [ -z "$KUBECONFIG_CONTENT" ]; then
+            echo "::notice::${CLUSTER_NAME} has no kubeconfig secret — rollback skipped"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          umask 077
+          printf '%s' "$KUBECONFIG_CONTENT" > "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.kube.outputs.configured == 'true'
+      - uses: actions/checkout@v4
+        if: steps.kube.outputs.configured == 'true' && inputs.pipeline_repo != ''
+        with:
+          repository: ${{ inputs.pipeline_repo }}
+          ref: ${{ inputs.pipeline_ref }}
+          path: .shared-pipeline
+      - name: Plan
+        if: steps.kube.outputs.configured == 'true'
+        run: |
+          SRC=scripts/ci
+          if [ -d .shared-pipeline ]; then SRC=.shared-pipeline/scripts/ci; fi
+          cp -r "$SRC" .ci-scripts
+          sh .ci-scripts/setup.sh
+          cat setup.env >> "$GITHUB_ENV"
+      - name: Rollback
+        if: steps.kube.outputs.configured == 'true'
+        run: sh .ci-scripts/rollback.sh

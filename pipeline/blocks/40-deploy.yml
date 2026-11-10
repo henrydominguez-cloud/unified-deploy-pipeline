@@ -1,0 +1,162 @@
+# 40-deploy — one set of templates, instantiated once per cluster.
+#
+# Values chain (last wins):
+#   chart/values.yaml  ->  envs/<env>/infra.yaml  ->  envs/<env>/app.yaml  ->  --set image.*
+# No --reuse-values: every deploy re-applies values from the repo, so
+# "what is in git" == "what is running".
+#
+# A cluster is enabled by defining a File-type CI/CD variable with its
+# kubeconfig: KUBECONFIG_CLUSTER_A / KUBECONFIG_CLUSTER_B. Undefined =
+# that cluster's jobs are not created (the self-test stays green).
+
+lint_chart:
+  stage: lint
+  image: $KUBE_IMAGE
+  needs: [setup]
+  rules:
+    - if: '$DEPLOYMENT_MODE == "rollback"'
+      when: never
+    - when: on_success
+  script:
+    - sh .ci-scripts/render.sh
+  artifacts:
+    paths: [rendered.yaml]
+    expire_in: 7 days
+
+# ── Templates ──────────────────────────────────────────────────────
+# The logic lives in scripts/ci/*.sh. These templates only pick the
+# image, the cluster credentials and when to run.
+
+.kube:
+  image: $KUBE_IMAGE
+  interruptible: false          # never cancel a half-applied release
+  before_script:
+    - export KUBECONFIG="$CLUSTER_KUBECONFIG"
+
+.deploy:
+  extends: .kube
+  stage: deploy
+  environment:
+    name: $CLUSTER_NAME/$CI_COMMIT_REF_SLUG
+  script:
+    - sh .ci-scripts/deploy.sh
+
+.smoke:
+  extends: .kube
+  stage: verify
+  script:
+    - sh .ci-scripts/smoke.sh
+
+.rollback:
+  extends: .kube
+  stage: rollback
+  script:
+    - sh .ci-scripts/rollback.sh
+
+# ── Cluster A ──────────────────────────────────────────────────────
+
+.cluster_a:
+  resource_group: cluster-a     # one deploy/rollback at a time per cluster
+  variables:
+    CLUSTER_NAME: cluster-a
+    CLUSTER_KUBECONFIG: $KUBECONFIG_CLUSTER_A
+
+deploy_cluster_a:
+  extends: [.deploy, .cluster_a]
+  needs:
+    - setup
+    - lint_chart
+    - job: scan_image
+      optional: true
+  rules:
+    - if: '$DEPLOYMENT_MODE == "rollback"'
+      when: never
+    - if: '$TARGET_CLUSTERS !~ /^(cluster-a|both)$/'
+      when: never
+    - if: '$KUBECONFIG_CLUSTER_A == null'
+      when: never
+    - if: '$DEPLOYMENT_MODE == "config_only"'
+      when: on_success            # mode was chosen on purpose; no extra click
+    - when: manual                # full / deploy_image: human gate
+
+smoke_cluster_a:
+  extends: [.smoke, .cluster_a]
+  needs: [setup, deploy_cluster_a]
+  rules:
+    - if: '$DEPLOYMENT_MODE == "rollback"'
+      when: never
+    - if: '$TARGET_CLUSTERS !~ /^(cluster-a|both)$/'
+      when: never
+    - if: '$KUBECONFIG_CLUSTER_A == null'
+      when: never
+    - when: on_success
+
+rollback_cluster_a:
+  extends: [.rollback, .cluster_a]
+  needs:
+    - setup
+    - job: deploy_cluster_a
+      optional: true
+  rules:
+    - if: '$TARGET_CLUSTERS !~ /^(cluster-a|both)$/'
+      when: never
+    - if: '$KUBECONFIG_CLUSTER_A == null'
+      when: never
+    - if: '$DEPLOYMENT_MODE == "rollback"'
+      when: on_success
+    - when: manual                # undo button after any deploy
+      allow_failure: true
+
+# ── Cluster B ──────────────────────────────────────────────────────
+
+.cluster_b:
+  resource_group: cluster-b     # one deploy/rollback at a time per cluster
+  variables:
+    CLUSTER_NAME: cluster-b
+    CLUSTER_KUBECONFIG: $KUBECONFIG_CLUSTER_B
+
+deploy_cluster_b:
+  extends: [.deploy, .cluster_b]
+  needs:
+    - setup
+    - lint_chart
+    - job: scan_image
+      optional: true
+  rules:
+    - if: '$DEPLOYMENT_MODE == "rollback"'
+      when: never
+    - if: '$TARGET_CLUSTERS !~ /^(cluster-b|both)$/'
+      when: never
+    - if: '$KUBECONFIG_CLUSTER_B == null'
+      when: never
+    - if: '$DEPLOYMENT_MODE == "config_only"'
+      when: on_success
+    - when: manual
+
+smoke_cluster_b:
+  extends: [.smoke, .cluster_b]
+  needs: [setup, deploy_cluster_b]
+  rules:
+    - if: '$DEPLOYMENT_MODE == "rollback"'
+      when: never
+    - if: '$TARGET_CLUSTERS !~ /^(cluster-b|both)$/'
+      when: never
+    - if: '$KUBECONFIG_CLUSTER_B == null'
+      when: never
+    - when: on_success
+
+rollback_cluster_b:
+  extends: [.rollback, .cluster_b]
+  needs:
+    - setup
+    - job: deploy_cluster_b
+      optional: true
+  rules:
+    - if: '$TARGET_CLUSTERS !~ /^(cluster-b|both)$/'
+      when: never
+    - if: '$KUBECONFIG_CLUSTER_B == null'
+      when: never
+    - if: '$DEPLOYMENT_MODE == "rollback"'
+      when: on_success
+    - when: manual
+      allow_failure: true
