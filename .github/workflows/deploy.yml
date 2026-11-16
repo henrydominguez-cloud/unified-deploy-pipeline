@@ -71,8 +71,30 @@ env:
   GRYPE_VERSION: v0.86.1
 
 jobs:
+  # ── every mode: reject unknown inputs before anything else runs ─────
+  # `clusters` picks the kubeconfig secret AND the GitHub environment. An
+  # unknown value (a typo such as "cluster-B") would otherwise fall through to
+  # cluster-b's secret under a new environment that has no required reviewers.
+  validate:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Check mode and clusters
+        env:
+          CLUSTERS: ${{ inputs.clusters }}
+        run: |
+          case "$DEPLOYMENT_MODE" in
+            full|config_only|deploy_image|rollback) ;;
+            *) echo "::error::mode='$DEPLOYMENT_MODE' (use full | config_only | deploy_image | rollback)"; exit 1 ;;
+          esac
+          case "$CLUSTERS" in
+            cluster-a|cluster-b|both) ;;
+            *) echo "::error::clusters='$CLUSTERS' (use cluster-a | cluster-b | both)"; exit 1 ;;
+          esac
+
   # ── full only: test, build, push to ghcr.io, scan ───────────────────
   build:
+    needs: validate
     if: inputs.mode == 'full'
     runs-on: ubuntu-latest
     permissions:
@@ -134,6 +156,7 @@ jobs:
 
   # ── every mode except rollback: helm lint + render ──────────────────
   lint:
+    needs: validate
     if: inputs.mode != 'rollback'
     runs-on: ubuntu-latest
     permissions:
@@ -227,6 +250,7 @@ jobs:
 
   # ── rollback, once per cluster ──────────────────────────────────────
   rollback:
+    needs: validate
     if: inputs.mode == 'rollback'
     runs-on: ubuntu-latest
     permissions:
